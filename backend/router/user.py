@@ -1,18 +1,13 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
-
+from schema.user import UserCreate, UserResponse
 
 router = APIRouter()
 
-
-class User(BaseModel):
-    username: str
-    password: str
-
-
-@router.post("/register")
-async def register(user: User):
+@router.post(
+    "/register",
+    response_model=UserResponse
+)
+async def register(user: UserCreate):
     return {
-        "message": "注册成功",
         "username": user.username
     }
