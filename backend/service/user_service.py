@@ -4,7 +4,7 @@ from sqlalchemy import select
 from model.user import User
 from schema.user import UserCreate
 
-from utils.security import hash_password
+from utils.security import hash_password,verify_password
 async def create_user(db: AsyncSession, user:UserCreate):
     # 1.查询用户名是否存在
     result=await db.execute(
@@ -35,4 +35,23 @@ async def get_user_by_id(db: AsyncSession, user_id: int):
         select(User).where(User.id == user_id)
     )
     user=result.scalar_one_or_none()
+    return user
+
+async def authenticate_user(
+    db: AsyncSession,
+    username: str,
+    password: str
+):
+    result=await db.execute(
+        select(User).where(User.username == username)
+    )
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        return None
+    if not verify_password(
+            password,
+            user.password_hash
+    ):
+        return None
     return user
