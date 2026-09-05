@@ -33,8 +33,10 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
-
+import { useUserStore } from '@/stores/user'
 import { loginApi } from '../api/user'
+
+const userStore = useUserStore()
 
 const router = useRouter()
 const username = ref('')
@@ -59,12 +61,8 @@ async function login() {
     })
 
     // 获取返回值的token
-    const token = response.data.access_token
-    // console.log(token);
-
-
     // 将token存储到本地
-    localStorage.setItem('token', token)
+    userStore.setToken(response.data.access_token)
 
     await router.push('/home')
   } catch (error) {
