@@ -10,6 +10,7 @@ from service.user_service import (
 )
 from utils.jwt import create_access_token
 from utils.auth import get_current_user
+from model.user import User
 
 router = APIRouter(prefix="/users", tags=["用户模块"])
 
@@ -23,6 +24,14 @@ async def register(user:UserCreate, db:AsyncSession = Depends(get_database)):
         raise HTTPException(status_code=400,detail="用户名已经存在")
 
     return result
+@router.get('/me')
+async def get_me(
+    current_user:User=Depends(get_current_user)
+):
+    return {
+        "id":current_user.id,
+        "username":current_user.username
+    }
 
 @router.get('/{user_id}', response_model=UserResponse)
 async def get_users(user_id:int,current_user=Depends(get_current_user),db:AsyncSession = Depends(get_database)):

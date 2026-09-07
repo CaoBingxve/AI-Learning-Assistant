@@ -43,7 +43,7 @@ def create_access_token(
 
     return encoded_jwt
 
-def decode_token(token:str):
+def decode_access_token(token:str):
 
     try:
         payload = jwt.decode(

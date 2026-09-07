@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 const request = axios.create({
   baseURL: 'http://127.0.0.1:8001',
@@ -20,6 +20,36 @@ request.interceptors.request.use(
     // 对请求错误做些什么
     return Promise.reject(error);
   } 
+)
+
+// 响应拦截器
+request.interceptors.response.use(
+  (response) => {
+    // 请求成功，直接返回完整的数据
+    return response
+  },
+  (error:AxiosError) => {
+    const status = error.response?.data
+    
+    const url = error.config?.url
+    
+    // 登录接口自己处理“用户名密码错误”
+    const isLoginRequest=url?.includes('users/login')
+
+    // 如果不是登录接口，但是返回401
+    // 那么说明登录无效或者过期了
+    if (status === 401 && !isLoginRequest) {
+      localStorage.removeItem('token')
+
+      if (
+        window.location.pathname !=='/login'
+      ) {
+        window.location.href='/login'
+      }
+    }
+
+    return Promise.reject(error)
+  }
 )
 
 

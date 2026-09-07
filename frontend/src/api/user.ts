@@ -16,3 +16,12 @@ export function loginApi(data:loginData) {
     data
   )
 }
+
+export interface userInfo{
+  id: number,
+  username:string
+}
+
+export function getCurrentUserApi() {
+  return request.get<userInfo>('/users/me')
+}

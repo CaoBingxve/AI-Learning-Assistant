@@ -24,7 +24,8 @@ async def create_user(db: AsyncSession, user:UserCreate):
     db.add(new_user)
 
     # 4. 提交
-    await db.commit()
+    # await db.commit()
+    await db.flush()
 
     # 5. 刷新获取id
     await db.refresh(new_user)

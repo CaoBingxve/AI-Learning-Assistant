@@ -1,6 +1,13 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 import os
 from dotenv import load_dotenv
+# config/database.py
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
+
+# 全局唯一 Base
+class Base(DeclarativeBase):
+    pass
 
 load_dotenv()
 

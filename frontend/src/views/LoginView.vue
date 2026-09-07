@@ -36,6 +36,7 @@ import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 import { loginApi } from '../api/user'
 
+// 数据
 const userStore = useUserStore()
 
 const router = useRouter()
@@ -44,6 +45,8 @@ const password = ref('')
 
 const errorMessage = ref('')
 const loading = ref(false)
+
+// 方法
 
 async function login() {
   errorMessage.value = ''
@@ -60,9 +63,11 @@ async function login() {
       password: password.value
     })
 
-    // 获取返回值的token
-    // 将token存储到本地
+    // 获取返回值的token,将token存储到本地
     userStore.setToken(response.data.access_token)
+
+    // 拿到用户信息，Pinia保存currentUser
+    await userStore.fetchCurrentUser()
 
     await router.push('/home')
   } catch (error) {

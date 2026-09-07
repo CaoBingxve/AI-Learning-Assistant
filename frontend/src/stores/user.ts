@@ -1,12 +1,15 @@
 import { defineStore } from 'pinia'
-import {computed, ref} from 'vue'
+import { computed, ref } from 'vue'
+import { getCurrentUserApi,type userInfo } from '@/api/user'
    
 export const useUserStore = defineStore('user', () => {
-  const username = ref('')
+  const currentUser = ref<userInfo|null>(null)
   
   const token = ref(
     localStorage.getItem('token')??''
   )
+
+  const initailized=ref(false)
 
   // !! 的作用是把值转换为布尔值
   const isLoggedIn=computed(() => {
@@ -18,17 +21,44 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('token',newToken)
   }
 
+  async function fetchCurrentUser() {
+    const response = await getCurrentUserApi()
+    currentUser.value=response.data
+  }
+
+  // 应用启动时恢复登录状态
+  async function initializedAuth() {
+    // 没有Token，根本就不用请求后端数据
+    if (!token.value) {
+      currentUser.value = null
+      initailized.value = true
+      return
+    }
+
+    try {
+      // 有token，重新去后端确认身份
+      await fetchCurrentUser()
+    } catch (error) {
+      logout()
+    } finally {
+      initailized.value=true
+    }
+  }
+
   function logout() {
-    username.value = ''
+    currentUser.value = null
     token.value = ''
     localStorage.removeItem('token')
   }
 
   return {
-    username,
+    currentUser,
     token,
+    initailized,
     isLoggedIn,
     setToken,
-    logout
+    fetchCurrentUser,
+    logout,
+    initializedAuth
   }
 })

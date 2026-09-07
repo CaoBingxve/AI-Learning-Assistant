@@ -1,17 +1,27 @@
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from router.user import router as user_router
-from config.database import engine
-from model.user import Base
+from router.learning_record import router as learning_record_router
+from config.database import engine, Base
+from model.user import User
+from model.learning_record import LearningRecord
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
-app.include_router(user_router)
-
-@app.on_event("startup")
-async def create_tables():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 应用启动：创建表
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    yield
+    # 应用关闭
+    await engine.dispose()
+
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(user_router)
+app.include_router(learning_record_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

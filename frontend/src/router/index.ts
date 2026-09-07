@@ -1,3 +1,4 @@
+import { useUserStore } from "@/stores/user";
 import ChatView from "@/views/ChatView.vue";
 import HomeView from "@/views/HomeView.vue";
 import LoginView from "@/views/LoginView.vue";
@@ -5,7 +6,7 @@ import RecordView from "@/views/RecordView.vue";
 import RegisterView from "@/views/RegisterView.vue";
 import { createRouter, createWebHistory } from "vue-router";
 
-export default createRouter({
+const router=createRouter({
   history: createWebHistory(),
   routes: [
     {
@@ -21,12 +22,18 @@ export default createRouter({
     {
       name: 'home',
       path: '/home',
-      component:HomeView
+      component: HomeView,
+      meta: {
+        requiresAuth: true
+      }
     },
     {
       name: 'records',
       path: '/records',
-      component:RecordView
+      component: RecordView,
+      meta: {
+        requiresAuth: true
+      }
     },
     {
       name: 'chat',
@@ -35,3 +42,18 @@ export default createRouter({
     }
   ]
 })
+router.beforeEach((to) => {
+  const userStore=useUserStore()
+
+  if (to.meta.requiresAuth && !userStore.isLoggedIn) {
+    return { name: "login" };
+  }
+
+  if (to.name === "login"  && userStore.isLoggedIn) {
+    return { name: "home" };
+  }
+
+  return true;
+})
+
+export default router

@@ -1,15 +1,39 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+
 import App from './App.vue'
 import router from './router'
-import { createPinia } from 'pinia'
-// 引入Element Plus
-import ElementPlus from 'element-plus'
-// import 'element-plus/dist/index.css'
 
-const app = createApp(App)
+import { useUserStore } from './user.js'
 
-app.use(router)
-app.use(ElementPlus)
-app.use(createPinia())
 
-app.mount('#app')
+async function bootstrap() {
+
+  const app = createApp(App)
+
+  const pinia = createPinia()
+
+  // 这里面的顺序很重要
+  // 先注册Pinia
+  app.use(pinia)
+
+
+  // 获取userStore
+  const userStore =
+    useUserStore(pinia)
+
+
+  // 恢复登录状态
+  await userStore.initializedAuth()
+
+
+  // 再注册Router
+  app.use(router)
+
+
+  // 挂载Vue
+  app.mount('#app')
+}
+
+
+bootstrap()
