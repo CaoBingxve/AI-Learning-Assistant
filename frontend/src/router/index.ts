@@ -1,9 +1,4 @@
 import { useUserStore } from "@/stores/user";
-import ChatView from "@/views/ChatView.vue";
-import HomeView from "@/views/HomeView.vue";
-import LoginView from "@/views/LoginView.vue";
-import RecordView from "@/views/RecordView.vue";
-import RegisterView from "@/views/RegisterView.vue";
 import { createRouter, createWebHistory } from "vue-router";
 
 const router=createRouter({
@@ -12,17 +7,17 @@ const router=createRouter({
     {
       name: 'login',
       path: '/login',
-      component:LoginView
+      component:()=>import('@/views/LoginView.vue')
     },
     {
       name: 'register',
       path: '/register',
-      component:RegisterView
+      component: () =>import('@/views/RegisterView.vue')
     },
     {
       name: 'home',
       path: '/home',
-      component: HomeView,
+      component: ()=>import('@/views/HomeView.vue'),
       meta: {
         requiresAuth: true
       }
@@ -30,7 +25,7 @@ const router=createRouter({
     {
       name: 'records',
       path: '/records',
-      component: RecordView,
+      component: ()=>import('@/views/RecordView.vue'),
       meta: {
         requiresAuth: true
       }
@@ -38,7 +33,10 @@ const router=createRouter({
     {
       name: 'chat',
       path: '/chat',
-      component:ChatView
+      component: ()=>import('@/views/ChatView.vue'),
+      meta: {
+        requiresAuth: true
+      }
     }
   ]
 })
@@ -49,9 +47,10 @@ router.beforeEach((to) => {
     return { name: "login" };
   }
 
-  if (to.name === "login"  && userStore.isLoggedIn) {
-    return { name: "home" };
-  }
+  // if ((to.name === 'login' || to.name === 'register')
+  //   && userStore.isLoggedIn) {
+  //   return { name: "home" };
+  // }
 
   return true;
 })

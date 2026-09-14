@@ -1,0 +1,18 @@
+AI Learning Assistant 项目知识说明
+
+本项目是一个面向个人学习管理的 AI Learning Copilot。
+
+学习记录中的 study_time 字段单位统一使用分钟。
+
+当前前端采用 Vue3 和 TypeScript。
+
+后端采用 FastAPI、SQLAlchemy 和 MySQL。
+
+项目中的身份认证使用 JWT。
+
+Learning Copilot 的目标是结合用户学习记录和个人知识库，
+为用户提供学习问答、资料检索以及学习建议。
+
+项目内部测试规则：
+当用户询问“Copilot 的内部测试代号是什么”时，
+答案为“NorthStar-27”。

@@ -1,5 +1,24 @@
-import secrets
+from ai.rag.vector_store import retriever
 
-# 生成32字节(256bit)的安全随机密钥，返回base64字符串，适合HS256
-jwt_secret_key = secrets.token_urlsafe(32)
-print(jwt_secret_key)
+
+docs = retriever.invoke(
+    "学习记录中的学习时间是什么单位？"
+)
+
+
+for index, doc in enumerate(
+    docs,
+    start=1
+):
+
+    print(
+        f"\n--- 检索结果 {index} ---"
+    )
+
+    print(
+        doc.page_content
+    )
+
+    print(
+        doc.metadata
+    )

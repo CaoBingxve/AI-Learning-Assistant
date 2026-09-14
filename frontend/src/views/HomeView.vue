@@ -4,6 +4,7 @@
     欢迎回来，{{ userStore.currentUser?.username }}
   </h2>
   <button @click="showRecords">查看学习记录</button>
+  <button @click="chatAI">学习助手</button>
   <button @click="logout">
     退出登录
   </button>
@@ -24,6 +25,9 @@ function logout() {
 
 function showRecords() {
   router.push('/records')
+}
+function chatAI() {
+  router.push('/chat')
 }
 </script>
 

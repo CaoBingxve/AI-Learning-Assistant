@@ -1,5 +1,6 @@
 import request from "./request";
 
+// 登录
 export interface loginData{
   username: string,
   password: string
@@ -24,4 +25,17 @@ export interface userInfo{
 
 export function getCurrentUserApi() {
   return request.get<userInfo>('/users/me')
+}
+
+// 注册
+export interface RegisterData{
+  username: string,
+  password: string
+}
+
+export function registerApi(data:RegisterData) {
+  return request.post(
+    "/users/register",
+    data
+  )
 }

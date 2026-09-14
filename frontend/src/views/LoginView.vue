@@ -26,6 +26,14 @@
     <p v-if="errorMessage">
       {{ errorMessage }}
     </p>
+
+    <p>
+      还没有账号？
+
+      <RouterLink to="/register">
+        去注册
+      </RouterLink>
+    </p>
   </div>
 </template>
 
