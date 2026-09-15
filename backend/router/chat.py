@@ -1,7 +1,7 @@
 from fastapi import APIRouter,Depends,HTTPException
 
 from model.user import User
-from schema.chat import ChatRequest,ChatResponse
+from schema.chat import ChatRequest, ChatResponse, CopilotRequest
 
 from service.ai_service import ask_ai, ask_rag, ask_copilot
 from utils.auth import get_current_user
@@ -50,13 +50,14 @@ async def rag_chat(
 
 @router.post("/copilot",response_model=ChatResponse)
 async def copilot_chat(
-        request: ChatRequest,
+        request: CopilotRequest,
         current_user: User = Depends(get_current_user)
 ):
     try:
         answer = await ask_copilot(
             message=request.message,
-            use_id=current_user.id
+            user_id=current_user.id,
+            conversation_id=request.conversation_id
         )
         return ChatResponse(answer=answer)
     except Exception:

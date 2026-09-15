@@ -2,10 +2,13 @@ from typing import Literal
 from langchain_core.messages import SystemMessage
 from langgraph.graph import START,END,MessagesState,StateGraph
 from langgraph.prebuilt import ToolNode
+from langgraph.checkpoint.memory import InMemorySaver
 
 from ai.llm import llm
 from ai.prompts import COPILOT_SYSTEM_PROMPT
 from ai.tools import search_knowledge,create_learning_record_tool
+
+checkpointer = InMemorySaver()
 
 def create_copilot_graph(user_id:int):
     # 当前用户专属的学习记录工具
@@ -51,7 +54,7 @@ def create_copilot_graph(user_id:int):
             }
         )
         .add_edge("tools","agent")
-        .compile()
+        .compile(checkpointer=checkpointer)
     )
-    
+
     return builder
