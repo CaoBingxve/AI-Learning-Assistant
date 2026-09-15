@@ -1,96 +1,302 @@
 <template>
-  <div class="loginView">
-    <h1>AI Learning Assistant</h1>
+  <div class="auth-view">
 
-    <h2>登录</h2>
+    <!-- 标题 -->
+    <div class="auth-header">
+      <div class="auth-badge">
+        欢迎回来
+      </div>
 
-    <div>
-      <label>用户名：</label>
+      <h2>
+        登录你的账号
+      </h2>
 
-      <input v-model="username" type="text" placeholder="请输入用户名" />
+      <p>
+        继续记录学习，让 Copilot 更了解你的学习过程。
+      </p>
     </div>
 
 
-    <div>
-      <label>密码：</label>
+    <!-- Token 过期提示 -->
+    <div v-if="authMessage" class="message-box warning-message">
+      <span class="message-icon">!</span>
 
-      <input v-model="password" type="password" placeholder="请输入密码" />
+      <span>
+        {{ authMessage }}
+      </span>
     </div>
 
 
-    <button @click="login" :disabled="loading">
-      {{ loading ? '登录中...' : '登录' }}
-    </button>
+    <!-- 注册成功提示 -->
+    <div v-if="successMessage" class="message-box success-message">
+      <span class="message-icon">✓</span>
+
+      <span>
+        {{ successMessage }}
+      </span>
+    </div>
 
 
-    <p v-if="errorMessage">
-      {{ errorMessage }}
-    </p>
+    <!-- 登录错误 -->
+    <div v-if="errorMessage" class="message-box error-message">
+      <span class="message-icon">!</span>
 
-    <p>
-      还没有账号？
+      <span>
+        {{ errorMessage }}
+      </span>
+    </div>
 
-      <RouterLink to="/register">
-        去注册
+
+    <!-- 表单 -->
+    <form class="auth-form" @submit.prevent="handleLogin">
+
+      <div class="form-group">
+
+        <label for="username">
+          用户名
+        </label>
+
+        <div class="input-wrapper">
+
+          <span class="input-icon">
+            U
+          </span>
+
+          <input id="username" v-model="username" type="text" autocomplete="username" placeholder="请输入用户名" />
+
+        </div>
+
+      </div>
+
+
+      <div class="form-group">
+
+        <div class="label-row">
+
+          <label for="password">
+            密码
+          </label>
+
+        </div>
+
+
+        <div class="input-wrapper">
+
+          <span class="input-icon">
+            •
+          </span>
+
+          <input id="password" v-model="password" :type="showPassword ? 'text' : 'password'"
+            autocomplete="current-password" placeholder="请输入密码" />
+
+
+          <button type="button" class="password-toggle" @click="showPassword = !showPassword">
+            {{
+              showPassword
+                ? '隐藏'
+                : '显示'
+            }}
+          </button>
+
+        </div>
+
+      </div>
+
+
+      <button type="submit" class="submit-button" :disabled="loading">
+        <span v-if="loading">
+          正在登录...
+        </span>
+
+        <span v-else>
+          登录
+        </span>
+      </button>
+
+    </form>
+
+
+    <!-- 底部 -->
+    <div class="auth-footer">
+
+      <span>
+        还没有账号？
+      </span>
+
+      <RouterLink :to="{ name: 'register' }">
+        创建账号
       </RouterLink>
-    </p>
+
+    </div>
+
   </div>
 </template>
 
-<script setup lang="ts" name="loginView">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import axios from 'axios'
-import { useUserStore } from '@/stores/user'
-import { loginApi } from '../api/user'
 
-// 数据
-const userStore = useUserStore()
+<script setup lang="ts">
 
-const router = useRouter()
-const username = ref('')
-const password = ref('')
+import {
+  onMounted,
+  ref
+} from 'vue'
 
-const errorMessage = ref('')
-const loading = ref(false)
+import {
+  useRouter
+} from 'vue-router'
 
-// 方法
+import {
+  loginApi
+} from '@/api/user'
 
-async function login() {
+import {
+  useUserStore
+} from '@/stores/user'
+
+
+const router =
+  useRouter()
+
+const userStore =
+  useUserStore()
+
+
+const username =
+  ref('')
+
+const password =
+  ref('')
+
+const showPassword =
+  ref(false)
+
+const loading =
+  ref(false)
+
+const errorMessage =
+  ref('')
+
+const authMessage =
+  ref('')
+
+const successMessage =
+  ref('')
+
+
+async function handleLogin() {
+
   errorMessage.value = ''
 
-  if (!username.value || !password.value) {
-    errorMessage.value = '请输入用户名和密码'
+  const usernameValue =
+    username.value.trim()
+
+
+  if (
+    !usernameValue ||
+    !password.value
+  ) {
+
+    errorMessage.value =
+      '请输入用户名和密码。'
+
     return
   }
 
+
+  if (loading.value) {
+    return
+  }
+
+
+  loading.value = true
+
+
   try {
-    loading.value = true
-    const response = await loginApi({
-      username: username.value,
-      password: password.value
+
+    const response =
+      await loginApi({
+
+        username:
+          usernameValue,
+
+        password:
+          password.value
+      })
+
+
+    userStore.setToken(
+      response.data.access_token
+    )
+
+
+    await userStore
+      .fetchCurrentUser()
+
+
+    await router.push({
+      name: 'home'
     })
 
-    // 获取返回值的token,将token存储到本地
-    userStore.setToken(response.data.access_token)
 
-    // 拿到用户信息，Pinia保存currentUser
-    await userStore.fetchCurrentUser()
-
-    await router.push('/home')
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      errorMessage.value =
-        error.response?.data?.detail
-        ?? '登录失败'
-    } else {
-      errorMessage.value = '登录失败'
-    }
+
+    console.error(
+      '登录失败：',
+      error
+    )
+
+    errorMessage.value =
+      '用户名或密码错误，请重新输入。'
+
   } finally {
+
     loading.value = false
   }
 }
 
+
+onMounted(() => {
+
+  /*
+   * JWT过期提示
+   */
+  const auth =
+    sessionStorage.getItem(
+      'auth_message'
+    )
+
+
+  if (auth) {
+
+    authMessage.value = auth
+
+    sessionStorage.removeItem(
+      'auth_message'
+    )
+  }
+
+
+  /*
+   * 注册成功提示
+   */
+  const registerMessage =
+    sessionStorage.getItem(
+      'register_message'
+    )
+
+
+  if (registerMessage) {
+
+    successMessage.value =
+      registerMessage
+
+    sessionStorage.removeItem(
+      'register_message'
+    )
+  }
+
+})
+
 </script>
 
-<style scoped></style>
+
+<style scoped src="../assets/styles/auth-form.css"></style>

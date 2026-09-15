@@ -1,16 +1,46 @@
+
+# Environment
+
+.env
+.env.*
+!.env.example
+
+
 # Python
-.venv/
+
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+
+.venv/
+venv/
+
+.pytest_cache/
+.mypy_cache/
+
+
+# Frontend
+
+node_modules/
+dist/
+
 
 # IDE
+
 .idea/
+.vscode/
 
-# 环境变量
-.env
+# OS
 
-# Node
-node_modules/
+.DS_Store
+Thumbs.db
 
-# Vue build
-dist/
+
+# Logs
+
+*.log
+
+
+# Generated vector database
+
+backend/data/chroma/

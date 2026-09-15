@@ -1,149 +1,253 @@
 <template>
-  <div class="recordView">
-    <h2>学习记录</h2>
 
-    <!-- 添加模式 -->
-    <div class="addRecord" v-if="add">
+  <div class="record-view">
+
+    <!-- 页面标题 -->
+    <section class="page-header">
+
       <div>
-        <label>标题：</label>
-        <input v-model="title" type="text" placeholder="请输入标题" />
+
+        <h1 class="page-title">
+          学习记录
+        </h1>
+
+        <p class="page-description">
+          记录每天学了什么，让 Copilot 更了解你的学习情况。
+        </p>
+
       </div>
-      <div>
-        <label>内容：</label>
-        <textarea v-model="content" placeholder="请输入内容"></textarea>
-      </div>
-      <div>
-        <label>学习时间：</label>
-        <input v-model.number="studyTime" type="number" min="1" placeholder="请输入学习时间" />
-      </div>
-      <button @click="handleCreateRecord" :disabled="creating">
-        {{ creating ? '添加中...' : '确认添加' }}
+
+
+      <button class="primary-button add-button" @click="toggleAddMode">
+
+        {{
+          addMode
+            ? '取消添加'
+            : '+ 新增记录'
+        }}
+
       </button>
-    </div>
+
+    </section>
+
+
+    <!-- 统计 -->
+    <RecordStats :total-records="records.length" :total-study-time="totalStudyTime" :total-study-hours="totalStudyHours"
+      :average-study-time="averageStudyTime" />
+
+
+    <!-- 新增模式 -->
+    <RecordForm v-if="addMode" :creating="creating" :error-message="createError" @submit="handleCreateRecord"
+      @cancel="cancelCreate" />
+
 
     <!-- 列表模式 -->
-    <div v-else>
-      <div v-if="loading">
-        加载中……
-      </div>
-      <div v-else>
-        <div v-for="record in records" :key="record.id" class="record-item">
-          <h4>{{ record.title }}</h4>
-          <p>{{ record.content }}</p>
-          <p>学习时长：{{ record.study_time }}分钟</p>
-          <p>创建时间：{{ formatDate(record.created_at) }}</p>
-        </div>
-        <p v-if="records.length === 0">
-          暂无学习记录
-        </p>
-      </div>
-    </div>
-    <button @click="add = !add">
-      {{ add ? '取消添加' : '添加记录' }}
-    </button>
-    <p v-if="errorMessage" style="color: red">
-      {{ errorMessage }}
-    </p>
+    <RecordList v-else :records="sortedRecords" :loading="loading" :error-message="errorMessage" @retry="loadRecords"
+      @add="openCreateMode" />
 
   </div>
+
 </template>
 
-<script setup lang="ts" name="recordView">
-import { createRecordApi, getRecordsApi } from '@/api/record';
-import { onMounted, ref } from 'vue';
-import type { RecordResponse } from '@/api/record';
 
-// 数据
-const title = ref('')
-const content = ref('')
-const studyTime = ref(0)
-const errorMessage = ref('')
-const add = ref(false)
-const loading = ref(true)
-const creating = ref(false)
-// TS加上泛型
-const records = ref<RecordResponse[]>([])
+<script setup lang="ts">
 
-// 刷新列表函数，抽出来，初始化、新增完成都调用
-async function refreshRecordList() {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const res = await getRecordsApi()
-    records.value = res.data
-  } catch (e) {
-    errorMessage.value = "获取列表失败"
-  } finally {
-    loading.value = false
-  }
-}
+import {
+  onMounted,
+  ref
+} from 'vue'
 
-async function handleCreateRecord() {
-  errorMessage.value = ''
+import {
+  createRecordApi
+} from '@/api/record'
 
-  if (!title.value.trim() || !content.value.trim() || studyTime.value <= 0) {
-    errorMessage.value = '请填写所有信息，学习时间必须大于0'
+import type {
+  RecordCreate
+} from '@/api/record'
+
+import {
+  useRecords
+} from '@/composables/useRecords'
+
+import RecordStats
+  from '@/components/record/RecordStats.vue'
+
+import RecordForm
+  from '@/components/record/RecordForm.vue'
+
+import RecordList
+  from '@/components/record/RecordList.vue'
+
+
+/* =========================
+   学习记录数据
+========================= */
+
+const {
+
+  records,
+
+  sortedRecords,
+
+  totalStudyTime,
+
+  totalStudyHours,
+
+  averageStudyTime,
+
+  loading,
+
+  errorMessage,
+
+  loadRecords
+
+} = useRecords()
+
+
+/* =========================
+   页面状态
+========================= */
+
+const addMode =
+  ref(false)
+
+const creating =
+  ref(false)
+
+const createError =
+  ref('')
+
+
+/* =========================
+   创建记录
+========================= */
+
+async function handleCreateRecord(
+  data: RecordCreate
+) {
+
+  if (creating.value) {
     return
   }
-  // 防止重复点击
-  if (creating.value) return
+
+
+  createError.value = ''
+
   creating.value = true
 
-  console.log('创建记录:', {
-    title: title.value,
-    content: content.value,
-    studyTime: studyTime.value,
-  })
 
   try {
-    await createRecordApi({
-      title: title.value,
-      content: content.value,
-      study_time: studyTime.value
-    })
-    // 清空表单
-    title.value = ''
-    content.value = ''
-    studyTime.value = 0
-    add.value = false
-    // 新增完成重新拉取列表，页面立刻刷新
-    await refreshRecordList()
+
+    await createRecordApi(
+      data
+    )
+
+
+    /*
+     * 创建成功后：
+     *
+     * 1. 退出新增模式
+     * 2. 重新获取列表
+     */
+    addMode.value = false
+
+
+    await loadRecords()
+
+
   } catch (error) {
-    errorMessage.value = '创建失败'
+
+    console.error(
+      '创建学习记录失败：',
+      error
+    )
+
+
+    createError.value =
+      '学习记录保存失败，请稍后重试。'
+
+
   } finally {
+
     creating.value = false
   }
 }
 
-// 页面挂载获取数据
-onMounted(async () => {
-  await refreshRecordList()
+
+/* =========================
+   页面交互
+========================= */
+
+function openCreateMode() {
+
+  createError.value = ''
+
+  addMode.value = true
+}
+
+
+function cancelCreate() {
+
+  createError.value = ''
+
+  addMode.value = false
+}
+
+
+function toggleAddMode() {
+
+  createError.value = ''
+
+  addMode.value =
+    !addMode.value
+}
+
+
+/* =========================
+   初始化
+========================= */
+
+onMounted(() => {
+
+  loadRecords()
+
 })
 
-// 修改时间样式
-function formatDate(date: string) {
-  return new Date(date).toLocaleString()
-}
 </script>
 
+
 <style scoped>
-.record-item {
-  border: 1px solid #ccc;
-  padding: 12px;
-  margin: 8px 0;
-  border-radius: 6px;
+.record-view {
+  max-width: 1100px;
+
+  margin: 0 auto;
 }
 
-.addRecord>div {
-  margin: 8px 0;
+
+.page-header {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  margin-bottom: 28px;
 }
 
-label {
-  display: inline-block;
-  width: 80px;
+
+.add-button {
+  flex-shrink: 0;
 }
 
-input {
-  padding: 4px;
+
+@media (max-width: 800px) {
+
+  .page-header {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
 }
 </style>
