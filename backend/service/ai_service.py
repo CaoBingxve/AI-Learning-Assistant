@@ -1,5 +1,11 @@
+from unittest import result
+
+from overrides import final
+
 from ai.chat_chain import chat_chain
 from ai.rag.rag_chain import rag_chain
+from langchain_core.messages import HumanMessage
+from ai.copilot_graph import create_copilot_graph
 
 async def ask_ai(message:str)->str:
     answer = await chat_chain.ainvoke(
@@ -13,3 +19,17 @@ async def ask_rag(message: str) -> str:
         message
     )
     return answer
+
+async def ask_copilot(message: str,use_id:int) -> str:
+    graph=create_copilot_graph(use_id)
+    result = await graph.ainvoke(
+        {
+            "messages": [
+                HumanMessage(content=message)
+            ]
+        }
+    )
+
+    final_message=result["messages"][-1]
+    
+    return final_message.text

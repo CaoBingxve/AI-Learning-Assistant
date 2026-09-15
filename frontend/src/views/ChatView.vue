@@ -30,7 +30,7 @@
 
 <script setup lang="ts" name="chatView">
 import { ref } from 'vue';
-import { chatApi, ChatMessage } from '@/api/chat';
+import { copilotApi, ChatMessage } from '@/api/chat';
 
 const inputMessage = ref('')
 
@@ -61,8 +61,8 @@ async function sendMessage() {
   loading.value = true
 
   try {
-    const response = await chatApi({
-      message: message
+    const response = await copilotApi({
+      message
     })
 
     messages.value.push({
