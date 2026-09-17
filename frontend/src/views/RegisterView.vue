@@ -292,5 +292,4 @@ async function handleRegister() {
 
 </script>
 
-
 <style scoped src="../assets/styles/auth-form.css"></style>

@@ -73,7 +73,7 @@ LLM            RAG Tool          Record Tool
 - Vue 3 负责用户界面与交互
 - FastAPI 提供业务 API
 - JWT 负责用户身份认证
-- MySQL 保存用户和学习记录
+- MySQL 保存用户、学习记录、聊天会话和历史消息
 - Chroma 保存个人知识库向量
 - LangGraph 负责 Agent 工作流
 - DeepSeek 负责模型推理
@@ -143,7 +143,7 @@ get_learning_records
 - Token 失效自动跳转登录页
 - 登录过期提示
 - Vue Router 权限控制
-- 多用户数据隔离
+- 学习记录与会话按用户隔离
 
 受保护接口不会直接相信前端传来的 `user_id`。
 
@@ -307,45 +307,42 @@ Copilot 可以根据问题自主决定是否调用 Tool。
 
 # 多轮会话
 
-项目通过 LangGraph Checkpointer 实现多轮上下文。
+项目通过 **MySQL 持久化消息 + 每轮加载历史** 实现多轮上下文，当前 LangGraph 未配置 Checkpointer。
 
-当前使用：
+后端创建会话时生成字符串 UUID，前端使用返回的 `id` 作为 `conversation_id`。
 
-```text
-InMemorySaver
-```
+| 数据表 | 用途 |
+| --- | --- |
+| `conversation` | 保存会话 ID、所属用户、标题、创建时间和更新时间 |
+| `chat_message` | 保存所属会话、消息角色、内容和创建时间 |
 
-前端为每个会话生成：
-
-```text
-conversation_id
-```
-
-后端结合当前用户：
+一次问答的处理流程：
 
 ```text
-user_id + conversation_id
+JWT 确认当前用户
+   ↓
+校验 conversation_id 属于当前用户
+   ↓
+写入本次用户消息（flush）
+   ↓
+按 created_at、id 升序读取历史消息
+   ↓
+user → HumanMessage / assistant → AIMessage
+   ↓
+LangGraph 注入系统提示词并调用模型与工具
+   ↓
+保存最终 AI 回答，成功后提交事务
 ```
 
-构建：
+前端聊天页支持：
 
-```text
-thread_id
-```
+- 加载历史会话列表，按最近更新时间排序
+- 进入页面时打开最近会话，没有会话时自动创建
+- 新建会话、切换历史会话和继续提问
+- 使用首条用户消息自动生成会话标题，超过 30 个字符时截断并追加省略号
+- 展示历史消息及 Markdown 回答
 
-例如：
-
-```text
-user_3:550e8400-e29b-41d4-a716-446655440000
-```
-
-从而实现：
-
-- 同一会话可以记住上下文
-- 新建对话不会继承旧对话
-- 不同用户之间的会话相互隔离
-
-当前版本使用内存 Checkpointer，因此 Backend 重启后历史上下文会丢失。
+会话和消息按当前用户校验访问权限。成功提交的历史消息保存在 MySQL 中，后端重启后仍可恢复；不同会话的上下文相互独立。
 
 ---
 
@@ -383,7 +380,9 @@ user_id = 2
 ...
 ```
 
-只能访问当前已通过 JWT 验证的用户数据。
+学习记录工具只能访问当前已通过 JWT 验证的用户的学习记录；会话接口也会校验会话归属。
+
+当前 Chroma 知识库使用共享的 `learning_knowledge` 集合，尚未实现按用户隔离文档。
 
 ---
 
@@ -410,7 +409,7 @@ user_id = 2
 | FastAPI | Web API |
 | Pydantic | 请求 / 响应数据验证 |
 | SQLAlchemy | ORM |
-| MySQL | 用户与学习记录存储 |
+| MySQL | 用户、学习记录、会话与历史消息存储 |
 | aiomysql | MySQL 异步访问 |
 | JWT | 用户认证 |
 
@@ -436,6 +435,7 @@ frontend/
 └── src/
     ├── api/
     │   ├── chat.ts
+    │   ├── conversation.ts
     │   ├── record.ts
     │   ├── request.ts
     │   └── user.ts
@@ -510,6 +510,7 @@ RecordView
 
 ```text
 ChatView
+├── ChatHistory
 ├── ChatHeader
 ├── ChatMessageList
 ├── ChatEmptyState
@@ -541,25 +542,31 @@ backend/
 ├── knowledge/
 │
 ├── model/
+│   ├── conversation.py
 │   ├── learning_record.py
 │   └── user.py
 │
 ├── router/
 │   ├── chat.py
+│   ├── conversation.py
 │   ├── learning_record.py
 │   └── user.py
 │
 ├── schema/
 │   ├── chat.py
+│   ├── conversation.py
 │   ├── learning_record.py
 │   └── user.py
 │
 ├── service/
 │   ├── ai_service.py
+│   ├── conversation_service.py
 │   ├── learning_record_service.py
 │   └── user_service.py
 │
 ├── test/
+│   ├── test_ai_service.py
+│   ├── test_conversation_routes.py
 │   ├── test_copilot.py
 │   ├── test_retriever.py
 │   └── test_tools.py
@@ -615,11 +622,38 @@ GET /records
 
 ---
 
+## 会话与历史消息
+
+以下接口均需携带 `Authorization: Bearer <access_token>`。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/conversations` | 创建会话，无需请求体，返回会话对象 |
+| GET | `/conversations` | 获取当前用户的会话列表 |
+| GET | `/conversations/{conversation_id}/messages` | 按时间顺序获取指定会话消息 |
+
+创建会话的响应示例：
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "新对话",
+  "created_at": "2026-09-17T10:00:00",
+  "updated_at": "2026-09-17T10:00:00"
+}
+```
+
+`id` 是字符串 UUID，前端 `ConversationResponse.id` 的类型为 `string`。消息对象包含 `id`、`conversation_id`、`role`、`content` 和 `created_at`，其中消息自身的 `id` 为整数。
+
+会话不存在或不属于当前用户时，读取消息返回 `404`。
+
 ## AI Copilot
 
 ```text
 POST /chat/copilot
 ```
+
+需要 JWT 认证。先调用 `POST /conversations` 获取会话 ID，再发送问题；同一会话后续请求复用该 ID，无需前端重复提交历史消息。
 
 请求示例：
 
@@ -716,17 +750,12 @@ MySQL 学习记录
 
 ## 5. 会话级上下文隔离
 
-通过：
-
-```text
-user_id + conversation_id
-```
-
-生成 LangGraph `thread_id`，实现：
+通过当前用户身份校验会话归属，再从 MySQL 加载该会话历史，实现：
 
 - 用户隔离
 - 会话隔离
 - 多轮上下文
+- 后端重启后恢复已保存的消息
 
 ---
 
@@ -753,8 +782,9 @@ View
 
 ```text
 Python 3.11
-Node.js
+Node.js ^20.19.0 或 >=22.12.0（以 frontend/package.json 为准）
 MySQL
+uv
 ```
 
 项目主要开发环境：
@@ -810,15 +840,16 @@ DEEPSEEK_MODEL=deepseek-chat
 
 ## Backend
 
-进入后端目录：
+在项目根目录同步 Python 依赖，然后进入后端目录：
 
 ```bash
+uv sync
 cd backend
 ```
 
-确保 MySQL 已启动，并完成环境变量配置。
+确保 MySQL 已启动、`MYSQL_DATABASE` 指定的数据库已创建，并完成 `backend/.env` 配置。应用启动时通过 `Base.metadata.create_all` 创建缺失的数据表；已有表结构的变更需要另行迁移。
 
-如果使用项目当前的 uv 环境，可根据项目依赖配置同步 Python 环境。
+当前 `pyproject.toml` 的 uv 环境配置限定 Windows / CPython。首次启动会加载本地 Embedding 模型，模型未缓存时需要下载。
 
 启动 FastAPI：
 
@@ -876,16 +907,16 @@ http://localhost:5173
 backend/knowledge/
 ```
 
-执行：
+在 `backend` 目录执行：
 
 ```bash
-python ai/rag/ingest.py
+python -m ai.rag.ingest
 ```
 
 或者：
 
 ```bash
-uv run python ai/rag/ingest.py
+uv run python -m ai.rag.ingest
 ```
 
 处理流程：
@@ -906,13 +937,29 @@ Embedding
 backend/data/chroma/
 ```
 
-向量数据库属于可重新生成数据，因此默认不提交到 Git。
+向量数据库属于可重新生成数据，已配置 Git 忽略规则。当前 ingest 会追加文档，重复运行不会自动去重。
 
 ---
 
 # 测试
 
-当前保留三个 AI 核心测试：
+## 离线回归测试
+
+在项目根目录执行：
+
+```bash
+uv run python -m unittest discover -s backend/test -p test_ai_service.py -v
+uv run python -m unittest discover -s backend/test -p test_conversation_routes.py -v
+```
+
+- `test_ai_service.py`：验证历史消息及当前问题按角色和顺序传入 Agent，以及无权访问的会话不会调用模型。
+- `test_conversation_routes.py`：验证创建会话、列表、历史消息路径和会话不存在时的 `404`。
+
+这些测试使用模拟服务，不调用真实模型或数据库；路由测试导入数据库配置，仍需有效的环境变量配置。
+
+## AI 集成测试
+
+保留三个需要实际模型、知识库或数据库环境的手动测试脚本：
 
 ```text
 backend/test/
@@ -934,6 +981,18 @@ test_copilot.py
 → LangGraph Copilot
 ```
 
+在 `backend` 目录使用模块方式运行，例如：
+
+```bash
+uv run python -m test.test_copilot
+```
+
+运行前检查脚本中的测试用户 ID 和问题内容，模型调用可能产生 API 费用。
+
+## 前端构建
+
+在 `frontend` 目录执行 `npm run build`。当前脚本运行 Vite 构建，不包含完整 TypeScript 类型检查。
+
 ---
 
 # 当前完成情况
@@ -943,8 +1002,8 @@ test_copilot.py
 - [x] JWT 身份认证
 - [x] 登录状态恢复
 - [x] Token 过期处理
-- [x] 多用户数据隔离
-- [x] 学习记录 CRUD 核心流程
+- [x] 学习记录与会话按用户隔离
+- [x] 学习记录创建与查询
 - [x] Dashboard 学习统计
 - [x] 本地知识库构建
 - [x] Chroma 向量检索
@@ -954,9 +1013,12 @@ test_copilot.py
 - [x] 多 Tool 综合调用
 - [x] 多轮上下文
 - [x] 新会话隔离
+- [x] MySQL 会话与历史消息持久化
+- [x] 历史会话列表与切换
+- [x] 首条消息自动生成会话标题
+- [x] 会话接口与消息转换回归测试
 - [x] Markdown 回答渲染
 - [x] 前端组件化重构
-- [x] 前后端完整联调
 
 ---
 
@@ -964,15 +1026,15 @@ test_copilot.py
 
 当前版本仍有一些可以继续优化的地方：
 
-### 会话未持久化
+### 历史消息尚未分页或压缩
 
-目前使用：
+当前每次问答都会加载完整会话历史。长会话会增加模型输入长度和调用成本，尚未实现消息分页、上下文裁剪或摘要。
 
-```text
-InMemorySaver
-```
+目前仅持久化用户消息与最终 AI 回答，不保存工具调用中间状态，也不支持从中断的 Agent 执行步骤恢复。
 
-因此 Backend 重启后会话上下文消失。
+### 知识库尚未按用户隔离
+
+当前用户共享同一个 Chroma 集合；按用户隔离已覆盖学习记录和会话，尚未覆盖知识库文档。
 
 ### 知识库需要离线构建
 
@@ -1002,11 +1064,13 @@ SSE / Streaming
 
 # 后续优化方向
 
-- 聊天历史持久化
-- LangGraph 数据库 Checkpointer
+- 历史消息分页、上下文裁剪与摘要
+- 会话重命名、删除与搜索
+- 按需引入 LangGraph 数据库 Checkpointer，保存 Agent 中间执行状态
 - Streaming 流式输出
 - 用户上传知识库文件
 - 文档管理
+- 知识库文档按用户隔离
 - RAG 来源引用展示
 - 学习计划自动生成
 - 学习目标管理
@@ -1014,7 +1078,7 @@ SSE / Streaming
 - 更多 Agent Tools
 - RAG 检索质量优化
 - Docker Compose 一键启动
-- 自动化测试
+- 扩展数据库集成测试与前端端到端测试
 - 云端部署
 
 ---
@@ -1048,6 +1112,8 @@ LangGraph
 ↓
 Multi-turn Context
 ↓
+MySQL Conversation History
+↓
 AI Learning Copilot
 ```
 
@@ -1063,17 +1129,9 @@ AI Learning Copilot
 AI Learning Copilot V1.0
 ```
 
-核心功能已经完成并通过完整流程测试。
+目前已实现学习记录、RAG Agent 和 MySQL 历史会话功能，正在持续完善交互与联调验证。
 
-项目目前进入：
-
-```text
-功能冻结
-→ 项目展示
-→ 实习求职
-```
-
-阶段。
+离线回归测试覆盖消息转换和会话接口；真实模型、数据库及浏览器完整流程仍需在配置好的本地环境中验证。
 
 ---
 
